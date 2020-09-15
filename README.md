@@ -1,0 +1,2 @@
+# RockPaperScissorAI
+Learning ai
