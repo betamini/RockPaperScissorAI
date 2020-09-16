@@ -4,15 +4,47 @@ import numpy as np
 class Brain:
 	def __init__(self, *layers_count):
 		self.ls = []
-		for count, next_count in zip(layers_count[:-1], layers_count[1:]):
-			self.ls.append(Layer(count, next_count).randomize())
+		prev_count = 0
+		for count in layers_count:
+			self.ls.append(Layer(prev_count, count).randomize())
+			prev_count = count
 	
-	def thing(self, X, targets):
+	def forward(self, X):
+		# feedforward
+		#activation = x
+		#activations = [x] # list to store all the activations, layer by layer
+		#zs = [] # list to store all the z vectors, layer by layer
+		#for b, w in zip(self.biases, self.weights):
+		#    z = np.dot(w, activation)+b
+		#    zs.append(z)
+		#   activation = sigmoid(z)
+		#    activations.append(activation)
+		ls = self.ls
+		ls[0].activation = X
+		for i in range(1, len(ls)):
+			l_prev = ls[i - 1]
+			l = ls[i]
+			
+			l.raw_output = np.dot(l_prev.activation, l.weights) + l.b
+			l.activation = ReLU(l.raw_output)
+
+		return ls[-1].a
+
+	def train(self, X, targets, eta):
+		self.forward(X)
+
 		ls = self.ls
 		ls[-1].delta = cost_derivativ(ls[-1].a, targets) * ReLUder(ls[-1].z)
 
 		for i in range(2, len(self.ls)):
 			ls[-i].delta = np.dot(ls[-i+1].delta, ls[-i+1].w.T) * ReLUder(ls[-i].z)
+
+		for i in range(1, len(self.ls)):
+			l = ls[-i]
+			avgdelta = np.average(l.delta, axis=0)
+			l.bias = l.bias - eta  * avgdelta
+			avgdelta = np.average(np.dot(ls[-i-1].a.T, l.delta), axis=0)
+			l.weights= l.weights - eta  * avgdelta
 
 
 class Layer():
@@ -56,29 +88,29 @@ class Layer():
 		self.raw_output = np.zeros((input_.shape[0], self.weights.shape[1]))
 		self.activation = np.zeros((input_.shape[0], self.weights.shape[1]))
 		np.dot(input_, self.weights, out=self.raw_output)
-		ReLU(self.raw_output, out=self.activation)
+		ReLU(self.raw_output + self.bias, out=self.activation)
 		return self
 
 	def errorforoutputlayer(self, targets):
 		self.cost = cost_derivativ(self.a, targets)
-		self.output_error = np.multiply(self.cost, ReLUder(self.z))
-		return self.output_error
+		self.delta = self.cost * ReLUder(self.z)
+		return self.delta
 
 	#def errorforinput(self, raw_input):
-	#	self.input_error = np.multiply(np.dot(self.w.T, self.output_error), (1 * (raw_input > 0)))
+	#	self.input_error = np.multiply(np.dot(self.w.T, self.delta), (1 * (raw_input > 0)))
 	#	return self.input_error
 
 	def outputerror(self, layer_after):
-		#temp = np.dot(layer_after.delta, layer_after.w.T)
-		temp = np.dot(layer_after.w.T, layer_after.delta)
+		temp = np.dot(layer_after.delta, layer_after.w.T)
+		#temp = np.dot(layer_after.w.T, layer_after.delta)
 		#print((1 * (self.z > 0)))
-		self.delta = np.multiply(temp, ReLUder(self.z))
-		return self.output_error
+		self.delta = temp * ReLUder(self.z)
+		return self.delta
 
 	def learn(self, eta, layer_before_activation):
-		error = np.average(self.output_error, axis=0)
+		error = np.average(self.delta, axis=0)
 		self.bias = self.bias - (eta * error)
-		errorweight = np.average(np.dot(layer_before_activation.T, self.output_error), axis=0)
+		errorweight = np.average(np.dot(layer_before_activation.T, self.delta), axis=0)
 		self.weights = self.weights - (eta * errorweight)
 		#print()
 		#print()
@@ -92,7 +124,7 @@ def ReLU(x, out=None):
 	return np.maximum(x, 0, out=out)
 
 def ReLUder(x):
-	#k = 10
+	#k = 1000
 	#return 1 / (1 + np.exp(-(k * x)))
 	return (1 * (x > 0))
 	#return (1 * (x > 0) + 0.01 * (x < 0))
@@ -104,8 +136,34 @@ X = np.array([[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2]])
 Y = np.array([[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3]])# * 8
 
 
-brain = Brain(2, 10, 10, 2)
-brain.thing(X, Y)
+brain = Brain(1, 10, 10, 1)
+for i in range(200):
+	X = (np.random.random_sample((8, 1))) * 2.0 * np.pi
+	Y = np.sin(X)
+	brain.train(X, Y, 0.000005)
+
+x = np.array([np.linspace(0, np.pi, 20)]).T
+
+print(brain.forward(x))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 input_count = 1 #3 * 4 * 2
@@ -119,6 +177,7 @@ output_count = 1
 #Y = np.array([[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3]])# * 8
 
 l = [
+	Layer(0, input_count).randomize(),
 	Layer(input_count, layer1_count).randomize(),
 	Layer(layer1_count, layer2_count).randomize(),
 	Layer(layer2_count, output_count).randomize()
@@ -149,8 +208,8 @@ l = [
 #print(l[2].a)
 def sigmoid(z):
     """The sigmoid function."""
-    return 1.0/(1.0+np.exp(-z))
     return z
+    return 1.0/(1.0+np.exp(-z))
 
 def train(inputs, targets):
 	forward(inputs)
@@ -161,9 +220,9 @@ def train(inputs, targets):
 	l[1].outputerror(l[2])
 	l[0].outputerror(l[1])
 
-	l[2].learn(0.002, l[1].a)
-	l[1].learn(0.002, l[0].a)
-	l[0].learn(0.002, siginputs)
+	l[2].learn(0.00005, l[1].a)
+	l[1].learn(0.00005, l[0].a)
+	l[0].learn(0.00005, siginputs)
 
 def forward(inputs):
 	siginputs = sigmoid(inputs)
@@ -172,10 +231,10 @@ def forward(inputs):
 	l[2].forward(l[1].a)
 	return l[2].a
 
-print(f"Before training:")
-print(forward(np.array([[np.pi]])))
+#print(f"Before training:")
+#print(forward(np.array([[np.pi]])))
 
-for i in range(200):
+for i in range(0):
 	X = (np.random.random_sample((8, 1))) * np.pi
 	#X = np.array([np.linspace(-np.pi, np.pi, 16)]).T
 	#print(X)
@@ -185,12 +244,12 @@ for i in range(200):
 	print(forward(np.array([[np.pi]])))
 
 #x = np.array([np.linspace(0, np.pi, 50)]).T
-print("Result:")
+#print("Result:")
 #print(l[0].forward(np.array([[1,0.2]])).a)
-print(l[0].forward(sigmoid(np.array([[np.pi]]))).a)
-print(l[1].forward(l[0].a).a)
-print(l[2].forward(l[1].a).a)
-print()
+#print(l[0].forward(sigmoid(np.array([[np.pi]]))).a)
+#print(l[1].forward(l[0].a).a)
+#print(l[2].forward(l[1].a).a)
+#print()
 """print("Biases:")
 print(l[0].b)
 print()
