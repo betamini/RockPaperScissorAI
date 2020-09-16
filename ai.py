@@ -20,13 +20,14 @@ class Brain:
 		#   activation = sigmoid(z)
 		#    activations.append(activation)
 		ls = self.ls
-		ls[0].activation = X
+		ls[0].activation = X#Sigmoid(X)
 		for i in range(1, len(ls)):
 			l_prev = ls[i - 1]
 			l = ls[i]
 			
 			l.raw_output = np.dot(l_prev.activation, l.weights) + l.b
-			l.activation = ReLU(l.raw_output)
+			#l.raw_output = np.dot(l.activation, l.weights.T) + l.b
+			l.activation = ActivationFunction(l.raw_output)
 
 		return ls[-1].a
 
@@ -34,17 +35,26 @@ class Brain:
 		self.forward(X)
 
 		ls = self.ls
-		ls[-1].delta = cost_derivativ(ls[-1].a, targets) * ReLUder(ls[-1].z)
+		ls[-1].delta = cost_derivativ(ls[-1].a, targets) * dActivationFunction(ls[-1].z)
 
 		for i in range(2, len(self.ls)):
-			ls[-i].delta = np.dot(ls[-i+1].delta, ls[-i+1].w.T) * ReLUder(ls[-i].z)
+			l = ls[-i]
+			next_l = ls[-i+1]
+			l.delta = np.dot(next_l.delta, next_l.w.T) * dActivationFunction(l.z)
 
 		for i in range(1, len(self.ls)):
 			l = ls[-i]
-			avgdelta = np.average(l.delta, axis=0)
+			l_prior = ls[-i-1]
+			#avgdelta = np.average(l.delta, axis=0)
+			avgdelta = np.sum(l.delta, axis=0)
 			l.bias = l.bias - eta  * avgdelta
-			avgdelta = np.average(np.dot(ls[-i-1].a.T, l.delta), axis=0)
+			#avgdelta = np.average(np.dot(l_prior.a.T, l.delta), axis=0)
+			#avgdelta = np.average(np.dot(l.a.T, l.delta), axis=0)
+			avgdelta = np.sum(np.dot(l.a.T, l.delta), axis=0)
 			l.weights= l.weights - eta  * avgdelta
+
+			if i == 1:
+				print(np.average(l.delta, axis=0))
 
 
 class Layer():
@@ -57,9 +67,9 @@ class Layer():
 		self.delta = None
 	
 	def randomize(self):
-		self.weights = (np.random.random_sample(self.weights.shape) - 0.5 + 0.5)# * 2.0
+		self.weights = (np.random.random_sample(self.weights.shape) - 0.5) #+ 0.5)# * 2.0
 		#self.weights = np.ones(self.weights.shape)
-		self.bias = np.random.random_sample(self.bias.shape) #np.zeros(self.bias.shape) + 1.0# + (np.random.random_sample(self.bias.shape)) * 0.3
+		self.bias = np.random.random_sample(self.bias.shape) - 0.5 #np.zeros(self.bias.shape) + 1.0# + (np.random.random_sample(self.bias.shape)) * 0.3
 		#self.bias = np.ones(self.bias.shape)
 		return self
 
@@ -83,71 +93,79 @@ class Layer():
 	@property
 	def a(self):
 		return self.activation
-	
-	def forward(self, input_):
-		self.raw_output = np.zeros((input_.shape[0], self.weights.shape[1]))
-		self.activation = np.zeros((input_.shape[0], self.weights.shape[1]))
-		np.dot(input_, self.weights, out=self.raw_output)
-		ReLU(self.raw_output + self.bias, out=self.activation)
-		return self
 
-	def errorforoutputlayer(self, targets):
-		self.cost = cost_derivativ(self.a, targets)
-		self.delta = self.cost * ReLUder(self.z)
-		return self.delta
+def ActivationFunction(x):
+	return ReLU(x)
+	return LeakyReLU(x)
+	return SoftPluss(x)
+	return Sigmoid(x)
 
-	#def errorforinput(self, raw_input):
-	#	self.input_error = np.multiply(np.dot(self.w.T, self.delta), (1 * (raw_input > 0)))
-	#	return self.input_error
-
-	def outputerror(self, layer_after):
-		temp = np.dot(layer_after.delta, layer_after.w.T)
-		#temp = np.dot(layer_after.w.T, layer_after.delta)
-		#print((1 * (self.z > 0)))
-		self.delta = temp * ReLUder(self.z)
-		return self.delta
-
-	def learn(self, eta, layer_before_activation):
-		error = np.average(self.delta, axis=0)
-		self.bias = self.bias - (eta * error)
-		errorweight = np.average(np.dot(layer_before_activation.T, self.delta), axis=0)
-		self.weights = self.weights - (eta * errorweight)
-		#print()
-		#print()
-		#print()
-		#print(error)
-		#print()
-		#print(errorweight)
-		return self
+def dActivationFunction(x):
+	return dReLU(x)
+	return dLeakyReLU(x)
+	return dSoftPluss(x)
+	return dSigmoid(x)
 
 def ReLU(x, out=None):
 	return np.maximum(x, 0, out=out)
+def dReLU(x):
+	return (1 * (x >= 0))
 
-def ReLUder(x):
-	#k = 1000
-	#return 1 / (1 + np.exp(-(k * x)))
-	return (1 * (x > 0))
-	#return (1 * (x > 0) + 0.01 * (x < 0))
+def LeakyReLU(x):
+	return x * (x >= 0) + x * (0.01 * (x < 0))
+def dLeakyReLU(x):
+	return (1 * (x >= 0) + 0.01 * (x < 0))
+
+def SoftPluss(x, k=2):
+	return np.log(1 + np.exp(k * x))
+def dSoftPluss(x, k=2):
+	return 1 / (1 + np.exp(-(k * x)))
+
+def Sigmoid(x):
+	return 1 / (1 + np.exp(-x))
+def dSigmoid(x):
+	s = Sigmoid(x)
+	return s * (1 - s)
+def revSig(y):
+	return np.log(y / (1 - y))
 
 def cost_derivativ(output_activations, y):
 	return (output_activations - y)
 
-X = np.array([[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2]])
-Y = np.array([[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3]])# * 8
+def linearFunc(x):
+	a = 2.4
+	b = 7.0
+	return x * a + b
 
-
-brain = Brain(1, 10, 10, 1)
-for i in range(200):
-	X = (np.random.random_sample((8, 1))) * 2.0 * np.pi
-	Y = np.sin(X)
+brain = Brain(1, 1)
+for i in range(10000):
+	#X = np.array([[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2]])
+	#Y = np.array([[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3],[0.5, 0.3]])# * 8
+	X = (np.random.random_sample((16, 1)) * 20)
+	#X = np.array([np.linspace(0, np.pi, 32)]).T / 2.0 / np.pi
+	#Y = np.sin(X * 2.0 * np.pi)
+	Y = ActivationFunction(linearFunc(X))
+	#print(Y)
+	print(f"Training nr. {i}")
+	#brain.train(X, Y, 0.0005)
 	brain.train(X, Y, 0.000005)
+	#brain.train(X, Y, 0.23)
 
-x = np.array([np.linspace(0, np.pi, 20)]).T
+x = np.array([np.linspace(0, 10, 10)]).T
+print(x)
+print(linearFunc(x))
+#x = np.array([[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2],[1,0.2]])
 
 print(brain.forward(x))
+#print(revSig(brain.forward(x)))
 
 
-
+for l in brain.ls:
+	print()
+	print("Bias")
+	print(l.bias)
+	print("Weights")
+	print(l.weights)
 
 
 
